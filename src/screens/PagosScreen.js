@@ -1,159 +1,263 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Alert,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_URL } from "../services/api";
 
 export default function PagosScreen() {
-
-  const [busqueda, setBusqueda] = useState("");
-  const [clientes, setClientes] = useState([]);
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
-
+  const [cliente, setCliente] = useState("");
   const [total, setTotal] = useState("");
   const [anticipo, setAnticipo] = useState("");
   const [pagos, setPagos] = useState([]);
+  const [loading, setLoading] = useState(false);
 
+  // ===============================
+  // ✅ CARGAR PAGOS
+  // ===============================
+  const cargarPagos = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return;
+
+      const resp = await fetch(`${API_URL}/pagos`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await resp.json();
+
+      if (Array.isArray(data)) {
+        setPagos(data);
+      } else {
+        setPagos([]);
+      }
+    } catch (error) {
+      console.log("❌ error cargar pagos:", error);
+      setPagos([]);
+    }
+  };
+
+  // ===============================
+  // 💾 GUARDAR PAGO
+  // ===============================
+  const guardarPago = async () => {
+    try {
+      // ✅ VALIDACIÓN CORRECTA
+      if (!cliente?.trim() || total === "" || anticipo === "") {
+        Alert.alert("Error", "Todos los campos son obligatorios");
+        return;
+      }
+
+      setLoading(true);
+
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        Alert.alert("Error", "Sesión expirada");
+        return;
+      }
+
+      // 🔢 convertir números
+      const totalNum = Number(total);
+      const anticipoNum = Number(anticipo);
+
+      if (isNaN(totalNum) || isNaN(anticipoNum)) {
+        Alert.alert("Error", "Total y anticipo deben ser números");
+        return;
+      }
+
+      // ===============================
+      // 🔍 BUSCAR CLIENTE POR NOMBRE
+      // ===============================
+      let clienteId = null;
+
+      try {
+        const respClientes = await fetch(`${API_URL}/clientes`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const clientes = await respClientes.json();
+
+        const clienteExistente = clientes.find(
+          (c) =>
+            c.nombre?.toLowerCase().trim() === cliente.toLowerCase().trim(),
+        );
+
+        clienteId = clienteExistente?.id_cliente || null;
+      } catch (err) {
+        console.log("⚠️ no se pudieron cargar clientes");
+      }
+
+      // ===============================
+      // 🆕 CREAR CLIENTE SI NO EXISTE
+      // ===============================
+      if (!clienteId) {
+        console.log("🆕 creando cliente...");
+
+        const respNuevo = await fetch(`${API_URL}/clientes`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            nombre: cliente.trim(),
+          }),
+        });
+
+        const nuevoCliente = await respNuevo.json();
+        clienteId = nuevoCliente.id_cliente;
+      }
+
+      console.log("📦 enviando pago:", {
+        id_cliente: clienteId,
+        total: totalNum,
+        anticipo: anticipoNum,
+      });
+
+      // ===============================
+      // 💳 GUARDAR PAGO
+      // ===============================
+      const resp = await fetch(`${API_URL}/pagos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          id_cliente: clienteId,
+          total: totalNum,
+          anticipo: anticipoNum,
+        }),
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data.error || "Error al guardar");
+      }
+
+      Alert.alert("✅ Éxito", "Pago guardado");
+
+      // limpiar campos
+      setCliente("");
+      setTotal("");
+      setAnticipo("");
+
+      await cargarPagos();
+    } catch (error) {
+      console.log("❌ ERROR COMPLETO:", error);
+      Alert.alert("Error al guardar", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ===============================
+  // 🚀 AL ENTRAR
+  // ===============================
   useEffect(() => {
     cargarPagos();
-    cargarClientes();
   }, []);
 
-  const cargarPagos = async () => {
-    const data = await AsyncStorage.getItem("pagos");
-    if (data) setPagos(JSON.parse(data));
-  };
-
-  const cargarClientes = async () => {
-    const data = await AsyncStorage.getItem("clientes");
-    if (data) setClientes(JSON.parse(data));
-  };
-
-  const guardarPago = async () => {
-    if (!clienteSeleccionado || !total) return;
-
-    const nuevoPago = {
-      id: Date.now().toString(),
-      cliente: clienteSeleccionado.nombre,
-      clienteId: clienteSeleccionado.id,
-      total: Number(total),
-      anticipo: Number(anticipo || 0),
-      fecha: new Date().toISOString()
-    };
-
-    const nuevosPagos = [...pagos, nuevoPago];
-    setPagos(nuevosPagos);
-    await AsyncStorage.setItem("pagos", JSON.stringify(nuevosPagos));
-
-    setBusqueda("");
-    setClienteSeleccionado(null);
-    setTotal("");
-    setAnticipo("");
-  };
-
-  const calcularRestante = (total, anticipo) => {
-    return total - anticipo;
-  };
-
-  // FILTRO DE CLIENTES
-  const clientesFiltrados = clientes.filter(cliente =>
-    cliente.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  // ===============================
+  // 🎨 RENDER ITEM
+  // ===============================
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <Text style={styles.cardText}>
+        Cliente: {item.nombre || item.id_cliente}
+      </Text>
+      <Text style={styles.cardText}>Total: ${item.total}</Text>
+      <Text style={styles.cardText}>Anticipo: ${item.anticipo}</Text>
+      <Text style={styles.cardText}>Restante: ${item.restante}</Text>
+    </View>
   );
 
+  // ===============================
+  // 🖼️ UI
+  // ===============================
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Cobranza</Text>
 
-      {/* BUSCADOR */}
       <TextInput
-        placeholder="Buscar cliente..."
-        value={busqueda}
-        onChangeText={setBusqueda}
         style={styles.input}
+        placeholder="Nombre del cliente"
+        value={cliente}
+        onChangeText={setCliente}
       />
 
-      {/* LISTA FILTRADA */}
-      {busqueda.length > 0 && (
-        <FlatList
-          data={clientesFiltrados}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => {
-                setClienteSeleccionado(item);
-                setBusqueda(item.nombre);
-              }}
-            >
-              <Text>{item.nombre}</Text>
-            </TouchableOpacity>
-          )}
-        />
-      )}
-
-      {/* CLIENTE SELECCIONADO */}
-      {clienteSeleccionado && (
-        <Text style={{ marginBottom: 10 }}>
-          Cliente seleccionado: {clienteSeleccionado.nombre}
-        </Text>
-      )}
-
       <TextInput
+        style={styles.input}
         placeholder="Total"
+        keyboardType="numeric"
         value={total}
         onChangeText={setTotal}
-        keyboardType="numeric"
-        style={styles.input}
       />
 
       <TextInput
+        style={styles.input}
         placeholder="Anticipo"
+        keyboardType="numeric"
         value={anticipo}
         onChangeText={setAnticipo}
-        keyboardType="numeric"
-        style={styles.input}
       />
 
       <TouchableOpacity style={styles.button} onPress={guardarPago}>
-        <Text style={styles.buttonText}>Guardar pago</Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Guardar Pago</Text>
+        )}
       </TouchableOpacity>
 
       <FlatList
         data={pagos}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text>Cliente: {item.cliente}</Text>
-            <Text>Total: ${item.total}</Text>
-            <Text>Anticipo: ${item.anticipo}</Text>
-            <Text>Restante: ${calcularRestante(item.total, item.anticipo)}</Text>
-          </View>
-        )}
+        keyExtractor={(item, index) => index.toString()}
+        renderItem={renderItem}
+        ListEmptyComponent={<Text>No hay pagos</Text>}
       />
     </View>
   );
 }
 
+// ===============================
+// 🎨 ESTILOS
+// ===============================
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 20 },
+  title: { fontSize: 28, fontWeight: "bold", marginBottom: 10 },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
     padding: 10,
+    borderRadius: 8,
     marginBottom: 10,
-    borderRadius: 6,
   },
   button: {
-    backgroundColor: "#222",
+    backgroundColor: "#000",
     padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 15,
   },
-  buttonText: { color: "#fff", textAlign: "center" },
+  buttonText: { color: "#fff", fontWeight: "bold" },
   card: {
+    backgroundColor: "#f2f2f2",
     padding: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
+    borderRadius: 10,
     marginBottom: 10,
-    borderRadius: 6,
   },
+  cardText: { fontSize: 14 },
 });

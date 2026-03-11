@@ -1,7 +1,21 @@
-const API_URL = "https://succeedable-flowable-marquitta.ngrok-free.dev";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export const API_URL = "https://backend-production-b4f8.up.railway.app";
 
 /* =========================
-   LOGIN
+   🔒 SAFE JSON PARSER
+========================= */
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch (e) {
+    console.log("⚠️ Respuesta no es JSON");
+    return {};
+  }
+}
+
+/* =========================
+   🔐 LOGIN
 ========================= */
 export async function login(email, password) {
   console.log("🔐 Login a:", `${API_URL}/login`);
@@ -23,13 +37,20 @@ export async function login(email, password) {
     throw new Error(data?.error || "Error al iniciar sesión");
   }
 
+  // ✅ guardar token automáticamente
+  if (data.token) {
+    await AsyncStorage.setItem("token", data.token);
+  }
+
   return data;
 }
 
 /* =========================
-   GET AGENDAS
+   📥 GET AGENDAS
 ========================= */
-export async function getAgendas(token) {
+export async function getAgendas() {
+  const token = await AsyncStorage.getItem("token");
+
   console.log("📥 GET agendas");
 
   const response = await fetch(`${API_URL}/agendas`, {
@@ -52,9 +73,11 @@ export async function getAgendas(token) {
 }
 
 /* =========================
-   CREAR AGENDA
+   📤 CREAR AGENDA
 ========================= */
-export async function createAgenda(token, agendaData) {
+export async function createAgenda(agendaData) {
+  const token = await AsyncStorage.getItem("token");
+
   console.log("📤 POST agenda:", agendaData);
 
   const response = await fetch(`${API_URL}/agendas`, {
@@ -78,14 +101,80 @@ export async function createAgenda(token, agendaData) {
 }
 
 /* =========================
-   🔒 SAFE JSON PARSER
-   (esto evita crashes)
+   🎯 GET EVENTOS
 ========================= */
-async function safeJson(response) {
-  try {
-    return await response.json();
-  } catch (e) {
-    console.log("⚠️ Respuesta no es JSON");
-    return {};
+export async function getEventos() {
+  const token = await AsyncStorage.getItem("token");
+
+  console.log("📥 GET eventos");
+
+  const response = await fetch(`${API_URL}/eventos`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await safeJson(response);
+
+  if (!response.ok) {
+    throw new Error(data.error || "Error al obtener eventos");
   }
+
+  return data;
+}
+
+/* =========================
+   💰 GET PAGOS  ⭐ NUEVO
+========================= */
+export async function getPagos() {
+  const token = await AsyncStorage.getItem("token");
+
+  console.log("📥 GET pagos");
+
+  const response = await fetch(`${API_URL}/pagos`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = await safeJson(response);
+
+  console.log("📊 Pagos status:", response.status);
+
+  if (!response.ok) {
+    throw new Error(data?.error || "Error al obtener pagos");
+  }
+
+  return data;
+}
+
+/* =========================
+   💰 CREAR PAGO
+========================= */
+export async function crearPago(pagoData) {
+  const token = await AsyncStorage.getItem("token");
+
+  console.log("📤 POST pago:", pagoData);
+
+  const response = await fetch(`${API_URL}/pagos`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(pagoData),
+  });
+
+  const data = await safeJson(response);
+
+  console.log("📊 Crear pago status:", response.status);
+
+  if (!response.ok) {
+    throw new Error(data?.error || "Error al guardar pago");
+  }
+
+  return data;
 }

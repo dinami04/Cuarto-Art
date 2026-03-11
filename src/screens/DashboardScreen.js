@@ -13,15 +13,24 @@ export default function DashboardScreen({ navigation }) {
         <Text style={styles.buttonText}>Agendas</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("Eventos")}
+      >
         <Text style={styles.buttonText}>Eventos</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("Pagos")}
+      >
         <Text style={styles.buttonText}>Pagos</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("Clientes")}
+      >
         <Text style={styles.buttonText}>Clientes</Text>
       </TouchableOpacity>
     </View>
@@ -47,7 +56,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   buttonText: {
-    color: "#fff",
+    color: "#000000",
     fontSize: 18,
     textAlign: "center",
   },
