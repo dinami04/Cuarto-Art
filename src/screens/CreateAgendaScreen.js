@@ -25,7 +25,7 @@ export default function CreateAgendaScreen({ navigation }) {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      await createAgenda(token, {
+      await createAgenda({
         nombre_proyecto,
         tipo,
         fecha,

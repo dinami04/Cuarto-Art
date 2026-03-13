@@ -102,7 +102,7 @@ export default function PagosScreen() {
       // 🆕 CREAR CLIENTE SI NO EXISTE
       // ===============================
       if (!clienteId) {
-        console.log("🆕 creando cliente...");
+        console.log("creando cliente...");
 
         const respNuevo = await fetch(`${API_URL}/clientes`, {
           method: "POST",
@@ -116,14 +116,15 @@ export default function PagosScreen() {
         });
 
         const nuevoCliente = await respNuevo.json();
-        clienteId = nuevoCliente.id_cliente;
-      }
 
-      console.log("📦 enviando pago:", {
-        id_cliente: clienteId,
-        total: totalNum,
-        anticipo: anticipoNum,
-      });
+        if (!nuevoCliente.id_cliente) {
+          throw new Error("No se pudo crear el cliente");
+        }
+
+        clienteId = nuevoCliente.id_cliente;
+
+        console.log("cliente creado:", clienteId);
+      }
 
       // ===============================
       // 💳 GUARDAR PAGO
